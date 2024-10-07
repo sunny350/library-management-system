@@ -31,6 +31,7 @@ router.post("/login", async (req, res) => {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: "User Not Found" });
+    if (user.status === "DELETED") return res.status(400).json({ message: "user is already deleted" });
 
     const validPass = await bcrypt.compare(password, user.password);
     if (!validPass)
@@ -202,11 +203,34 @@ router.put('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => {
 
 router.delete('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.params.id, { status: 'DELETED', deletedBy : req.user.id});
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    if (user.booksBorrowed.length > 0) {
+      const borrowedBooks = await Book.find({ _id: { $in: user.booksBorrowed } });
+
+      for (const book of borrowedBooks) {
+        book.status = 'AVAILABLE';
+        await book.save();
+      }
+
+      user.booksReturned.push(...user.booksBorrowed);
+      user.booksBorrowed = []; 
+    }
+    user.status = 'DELETED';
+    user.deletedBy = req.user.id
+    await user.save();
+
     res.json({ 
       success: true,
-      message: 'User marked as deleted' 
-    });    
+      message: 'Account deleted' 
+    });   
   } catch (error) {
     res.status(500).json({ 
       success : false,
@@ -218,7 +242,29 @@ router.delete('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => 
 
 router.delete('/delete-account', auth, checkRole(['MEMBER']), async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user.id, { status: 'DELETED' });
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    if (user.booksBorrowed.length > 0) {
+      const borrowedBooks = await Book.find({ _id: { $in: user.booksBorrowed } });
+
+      for (const book of borrowedBooks) {
+        book.status = 'AVAILABLE';
+        await book.save();
+      }
+
+      user.booksReturned.push(...user.booksBorrowed);
+      user.booksBorrowed = []; 
+    }
+    user.status = 'DELETED';
+    user.deletedBy = "SELF";
+    await user.save();
     res.json({ 
       success: true,
       message: 'Account deleted' 
@@ -250,6 +296,76 @@ router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   }
 });
 
+
+
+
+// .................................Borrowing & Returning ............................................................
+
+router.post("/borrow/:id", auth, checkRole(["MEMBER"]), async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book || book.status !== "AVAILABLE")
+      return res.status(400).json({ message: "Book not available" });
+  
+    book.status = "BORROWED";
+    await book.save();
+  
+    const member = await User.findById(req.user.id);
+    member.booksBorrowed.push(book._id);
+    await member.save();
+  
+    res.json({ 
+      success: true,
+      message: "Book borrowed" 
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "book borrowed failed" , 
+      error: error.message 
+    });
+  }
+});
+
+router.post("/return/:id", auth, checkRole(["MEMBER"]), async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book || book.status !== "BORROWED")
+      return res.status(400).json({ message: "Book not borrowed" });
+  
+    book.status = "AVAILABLE";
+    await book.save();
+  
+    const member = await User.findById(req.user.id);
+  
+    const bookBorrowedIndex = member.booksBorrowed.indexOf(book._id);
+    if (bookBorrowedIndex === -1) {
+      return res.status(400).json({ message: "Book not borrowed by this user" });
+    }
+  
+    member.booksBorrowed.pull(book._id);
+    member.booksReturned.push(book._id);
+    await member.save();
+  
+    res.json({ 
+      success: true,
+      message: "Book returned" 
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "Book returned error", 
+      error: error.message 
+    });
+  }
+});
+
+// router.get("/history", auth, checkRole(["MEMBER"]), async (req, res) => {
+//   const member = await User.findById(req.user.id).populate("booksBorrowed");
+//   res.json(member.booksBorrowed);
+// });
 
 
 module.exports = router;

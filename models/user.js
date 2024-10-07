@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema({
     status: { type: String, enum: ['ACTIVE', 'DELETED'], default: 'ACTIVE' },
     deletedBy: { type: String},
     booksBorrowed: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Book' }],
+    booksReturned: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Book' }],
     createdAt: { type: Date, default: Date.now },
 });
 
