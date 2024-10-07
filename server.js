@@ -12,6 +12,11 @@ mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error(err));
 
+app.use('/api', require('./routes/api'));
+
+process.on('uncaughtException', (err)=>{
+    console.error('Uncaught Exception:', err.message); 
+})
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
