@@ -66,7 +66,7 @@ router.post("/login", async (req, res) => {
 const checkRole = (roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Access denied" });
+      return res.status(403).json({ message: "Invalid token" });
     }
     next();
   };
@@ -85,11 +85,18 @@ router.post("/books", auth, checkRole(["LIBRARIAN"]), async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ 
-      success : false,
-      message: "Error accured while adding Book", 
-      error: error.message 
-    });
+    if (error.code === 11000) {
+      res.status(400).json({
+        success: false,
+        error: `A book with the title "${req.body.title}" already exists. Please use a different title.`,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Error occurred while adding the book",
+        error: error.message
+      });
+    }
   }
 });
 
@@ -188,11 +195,18 @@ router.post('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ 
-      success : false,
-      message: "unable to add user", 
-      error: error.message 
-    });
+    if (error.code === 11000) {
+      res.status(400).json({
+        success: false,
+        error: `user ${req.body.username} already exists`,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Error occurred while adding the book",
+        error: error.message
+      });
+    }
   }
 });
 
