@@ -233,7 +233,10 @@ router.put("/users/:id", auth, checkRole(["LIBRARIAN"]), async (req, res) => {
       if (!isPasswordValid) {
         return res
           .status(400)
-          .json({ message: "Current password is incorrect" });
+          .json({ 
+            success: false,
+            error: "Current password is incorrect" 
+          });
       }
 
       // Hash the new password before saving
@@ -335,11 +338,15 @@ router.delete('/delete-account', auth, checkRole(['MEMBER']), async (req, res) =
 
 router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   try {
-    const users = await User.find({status : "ACTIVE"});
+    const users = await User.find({status : "ACTIVE"}, {password : 0});
+
+    let filteredUsers = users.filter((user) => {
+      return (user._id).toString() !== req.user.id;
+    })
     res.json({
       success: true,
       message: "Users fetched successfully", 
-      data : users
+      data : filteredUsers
     });
     
   } catch (error) {
