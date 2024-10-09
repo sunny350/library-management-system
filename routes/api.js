@@ -358,9 +358,9 @@ router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   }
 });
 
-router.get('/users/:id', auth, checkRole(['MEMBER', 'LIBRARIAN']), async (req, res) => {
+router.get('/users-profile', auth, checkRole(['MEMBER', 'LIBRARIAN']), async (req, res) => {
   try {
-    const user = await User.findOne({_id : req.params.id, status : "ACTIVE" });
+    const user = await User.findOne({_id : req.user.id, status : "ACTIVE" });
     if (!user)
       return res.status(404).json({ message: "User not found" });
   
@@ -443,10 +443,62 @@ router.post("/return/:id", auth, checkRole(["MEMBER"]), async (req, res) => {
   }
 });
 
-// router.get("/history", auth, checkRole(["MEMBER"]), async (req, res) => {
-//   const member = await User.findById(req.user.id).populate("booksBorrowed");
-//   res.json(member.booksBorrowed);
-// });
+router.get("/get/borrowed-books", auth, checkRole(["MEMBER"]), async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.status !== "ACTIVE")
+      return res.status(400).json({ message: "user not available" });
+
+    const borrowedBooksIds = user.booksBorrowed
+
+    const borrowedBooks = await Book.find({ _id: { $in: borrowedBooksIds } });
+  
+    res.json({ 
+      success: true,
+      message: "borrowed books data fetch",
+      data : borrowedBooks
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "fetch book borrowed failed" , 
+      error: error.message 
+    });
+  }
+});
+
+router.get("/history", auth, checkRole(["MEMBER"]), async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.status !== "ACTIVE")
+      return res.status(400).json({ message: "user not available" });
+
+    const returnedBooksIds = user.booksReturned
+
+    const returnedBooks = await Promise.all(
+      returnedBooksIds.map(async (bookId) => {
+        return await Book.findById(bookId);
+      })
+    );
+
+    const filterReturnedBooks = returnedBooks.filter((book) => book !== null);
+
+  
+    res.json({ 
+      success: true,
+      message: "returned books data fetch",
+      data : filterReturnedBooks
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "fetch book returned failed" , 
+      error: error.message 
+    });
+  }
+});
 
 
 module.exports = router;
