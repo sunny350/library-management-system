@@ -12,6 +12,10 @@ mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error(err));
 
+app.get('/', (req, res) => {
+    res.status(200).json({ status: 'OK', message: 'Server is healthy', uptime: process.uptime() });
+});
+
 app.use('/api', require('./routes/api'));
 
 process.on('uncaughtException', (err)=>{

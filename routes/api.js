@@ -12,14 +12,16 @@ const router = express.Router();
 // ........................... Signup Loging Apis ................................................
 
 router.post("/signup", async (req, res) => {
+  const { username, password, role } = req.body;
   try {
-    const { username, password, role } = req.body;
-
+    console.log(JSON.stringify({message: "signup request..", data: {username, role}}));
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ username, password: hashedPassword, role });
     await user.save();
+    console.log(JSON.stringify({message: "signup successful..", data: {username, role}}));
     res.status(201).json({ message: "User created" });
   } catch (error) {
+    console.log(JSON.stringify({message: "signup failed..", username, message : error.message}));
     res
       .status(500)
       .json({ message: "Internal Server Error", error: error.message });
@@ -27,8 +29,9 @@ router.post("/signup", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const { username, password } = req.body;
+    console.log(JSON.stringify({message: "login request..", username}));
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: "User Not Found" });
     if (user.status === "DELETED") return res.status(400).json({ message: "user is already deleted" });
@@ -42,9 +45,18 @@ router.post("/login", async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
+    console.log(JSON.stringify({message: "login succesful..", username}));
 
-    res.json({ token });
+    res.json({ 
+      success: true,
+      message: "Logged In Successfully",
+      data : {
+        token,
+        role: user.role
+      }
+     });
   } catch (error) {
+    console.log(JSON.stringify({message: "login failed..", message :error.message}));
     res
       .status(500)
       .json({ message: "Internal Server Error", error: error.message });
@@ -81,7 +93,7 @@ router.post("/books", auth, checkRole(["LIBRARIAN"]), async (req, res) => {
   }
 });
 
-router.get("/books", auth, checkRole(["LIBRARIAN"]), async (req, res) => {
+router.get("/books", auth, checkRole(["LIBRARIAN", "MEMBER"]), async (req, res) => {
   try {
     const books = await Book.find();
     res.status(201).json({
@@ -184,19 +196,48 @@ router.post('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   }
 });
 
-router.put('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => {
+router.put("/users/:id", auth, checkRole(["LIBRARIAN"]), async (req, res) => {
+  const userId = req.params.id;
+  const { name, role, currentPassword, newPassword } = req.body;
   try {
-    const { username, role } = req.body;
-    await User.findByIdAndUpdate(req.params.id, { username, role });
-    res.json({ 
+    const updateData = {
+      name,
+      role,
+    };
+
+    if (currentPassword && newPassword) {
+      // Fetch the user from the database
+      const user = await User.findById(userId);
+
+      if (!user) throw new Error("User not found");
+
+      // Verify the current password
+      const isPasswordValid = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
+      if (!isPasswordValid) {
+        return res
+          .status(400)
+          .json({ message: "Current password is incorrect" });
+      }
+
+      // Hash the new password before saving
+      updateData.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+    res.json({
       success: true,
-      message: 'User updated' 
-    });   
+      message: "User updated",
+      data: updatedUser,
+    });
   } catch (error) {
-    res.status(500).json({ 
-      success : false,
-      message: "unable to update user", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "unable to update user",
+      error: error.message,
     });
   }
 });
@@ -280,7 +321,7 @@ router.delete('/delete-account', auth, checkRole(['MEMBER']), async (req, res) =
 
 router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   try {
-    const users = await User.find();
+    const users = await User.find({status : "ACTIVE"});
     res.json({
       success: true,
       message: "Users fetched successfully", 
@@ -296,7 +337,26 @@ router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
   }
 });
 
-
+router.get('/users/:id', auth, checkRole(['MEMBER', 'LIBRARIAN']), async (req, res) => {
+  try {
+    const user = await User.findOne({_id : req.params.id, status : "ACTIVE" });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+  
+    res.json({
+      success: true,
+      message: "User fetched successfully", 
+      data : user
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "unable to fetch user", 
+      error: error.message 
+    });
+  }
+})
 
 
 // .................................Borrowing & Returning ............................................................
