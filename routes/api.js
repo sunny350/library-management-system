@@ -281,9 +281,7 @@ router.delete('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => 
       user.booksReturned.push(...user.booksBorrowed);
       user.booksBorrowed = []; 
     }
-    user.status = 'DELETED';
-    user.deletedBy = req.user.id
-    await user.save();
+    await User.findByIdAndDelete(req.user.id)
 
     res.json({ 
       success: true,
