@@ -281,7 +281,7 @@ router.delete('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => 
       user.booksReturned.push(...user.booksBorrowed);
       user.booksBorrowed = []; 
     }
-    await User.findByIdAndDelete(req.user.id)
+    await User.findByIdAndDelete(req.params.id)
 
     res.json({ 
       success: true,
@@ -345,6 +345,26 @@ router.get('/users', auth, checkRole(['LIBRARIAN']), async (req, res) => {
       success: true,
       message: "Users fetched successfully", 
       data : filteredUsers
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      success : false,
+      message: "unable to fetch user", 
+      error: error.message 
+    });
+  }
+});
+
+router.get('/users/:id', auth, checkRole(['LIBRARIAN']), async (req, res) => {
+  try {
+    const user = await User.findOne({_id : req.params.id, status : "ACTIVE"}, {password : 0});
+
+    if (!users) throw new Error('user not found');
+    res.json({
+      success: true,
+      message: "User fetched successfully", 
+      data : user
     });
     
   } catch (error) {
